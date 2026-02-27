@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"github.com/andresuarezz26/parkingmanagement/internal/config"
@@ -42,11 +43,24 @@ func main() {
 		"port", cfg.Port,
 		"env", cfg.Env,
 		"payment_mock", cfg.PaymentMockEnabled,
-		"jwks_url", cfg.SupabaseJWKSURL,
 	)
 
-	// Initialize router with middleware
-	r := router.New(cfg, logger)
+	// Connect to database
+	ctx := context.Background()
+	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		sugar.Fatalw("failed to connect to database", "error", err)
+	}
+	defer dbPool.Close()
+
+	// Verify connection
+	if err := dbPool.Ping(ctx); err != nil {
+		sugar.Fatalw("database ping failed", "error", err)
+	}
+	sugar.Info("database connected")
+
+	// Initialize router
+	r := router.New(cfg, logger, dbPool)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -72,10 +86,10 @@ func main() {
 	<-done
 	sugar.Info("shutting down...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		sugar.Fatalw("forced shutdown", "error", err)
 	}
 
