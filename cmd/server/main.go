@@ -17,7 +17,14 @@ import (
 
 func main() {
 	// Initialize logger
-	logger, err := zap.NewProduction()
+	var logger *zap.Logger
+	var err error
+
+	if os.Getenv("ENV") == "production" {
+		logger, err = zap.NewProduction()
+	} else {
+		logger, err = zap.NewDevelopment()
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 		os.Exit(1)
@@ -35,10 +42,11 @@ func main() {
 		"port", cfg.Port,
 		"env", cfg.Env,
 		"payment_mock", cfg.PaymentMockEnabled,
+		"jwks_url", cfg.SupabaseJWKSURL,
 	)
 
-	// Initialize router
-	r := router.New(cfg)
+	// Initialize router with middleware
+	r := router.New(cfg, logger)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)
