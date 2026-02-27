@@ -16,13 +16,18 @@ ALTER TABLE day_passes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies: users can only see their own account data
-CREATE POLICY IF NOT EXISTS accounts_own ON accounts FOR ALL USING (
-    id IN (SELECT account_id FROM users WHERE id = auth.uid())
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'accounts_own') THEN
+    CREATE POLICY accounts_own ON accounts FOR ALL USING (
+      id IN (SELECT account_id FROM users WHERE id = auth.uid())
+    );
+  END IF;
+END $$;
 
-CREATE POLICY IF NOT EXISTS vehicles_own ON vehicles FOR ALL USING (
-    account_id IN (SELECT account_id FROM users WHERE id = auth.uid())
-);
-
--- Operators/admins can see everything (applied via role check in middleware, not RLS)
--- Service role bypasses RLS by default in Supabase
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'vehicles_own') THEN
+    CREATE POLICY vehicles_own ON vehicles FOR ALL USING (
+      account_id IN (SELECT account_id FROM users WHERE id = auth.uid())
+    );
+  END IF;
+END $$;
